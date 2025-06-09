@@ -114,17 +114,7 @@
 
     function loginGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider)
-        .then(result => {
-          const userRef = db.collection("Usuarios").doc(result.user.uid);
-          return userRef.get().then(doc => {
-            if (!doc.exists) {
-              return userRef.set({ email: result.user.email, nivel: "leitor" });
-            }
-          });
-        })
-        .then(() => Swal.fire("Sucesso!", "Login com Google realizado", "success"))
-        .catch(error => Swal.fire("Erro", error.message, "error"));
+      auth.signInWithRedirect(provider);  // redireciona em vez de abrir popup
     }
 
     function initMap() {
