@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema com Login e Permissões</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; background: #f9fafb; }
+    #map { height: 100%; display: none; }
+    #auth-container {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #f9fafbcc; z-index: 2000;
+      display: flex; justify-content: center; align-items: center;
+    }
+    #auth-box {
+      background: white; padding: 20px; border-radius: 10px; width: 300px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1); text-align: center;
+    }
+    #auth-box input, #auth-box button {
+      width: 100%; margin-top: 8px; padding: 8px; font-size: 15px;
+    }
+    #auth-box button:last-of-type {
+      background: #DB4437; color: white;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+  <div id="auth-container">
+    <div id="auth-box">
+      <h3>Entrar no sistema</h3>
+      <input id="email" type="email" placeholder="E-mail" autofocus />
+      <input id="senha" type="password" placeholder="Senha" />
+      <button onclick="login()">Entrar</button>
+      <button onclick="cadastrar()">Cadastrar</button>
+      <hr />
+      <button onclick="loginGoogle()">Entrar com Google</button>
+    </div>
+  </div>
+
+  <div id="map" inert></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCTlpyWixrespwJRK61G4iuxMqE2Ds-Qsg",
+      authDomain: "ruas-gurinhem.firebaseapp.com",
+      projectId: "ruas-gurinhem"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let nivelUsuario = null;
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        db.collection("Usuarios").doc(user.uid).get().then(doc => {
+          if (!doc.exists) {
+            Swal.fire("Erro", "Usuário sem permissão cadastrada.", "error");
+            return;
+          }
+          nivelUsuario = doc.data().nivel;
+          if (nivelUsuario === "admin" || nivelUsuario === "editor") {
+            document.getElementById("auth-container").style.display = "none";
+            document.getElementById("auth-container").removeAttribute("aria-hidden");
+            const mapEl = document.getElementById("map");
+            mapEl.removeAttribute("inert");
+            mapEl.style.display = "block";
+            initMap();
+          } else {
+            Swal.fire("Acesso negado", "Você não tem permissão para acessar esta área.", "warning");
+          }
+        });
+      } else {
+        document.getElementById("auth-container").style.display = "flex";
+        document.getElementById("auth-container").removeAttribute("aria-hidden");
+      }
+    });
+
+    function login() {
+      const email = document.getElementById("email").value.trim();
+      const senha = document.getElementById("senha").value.trim();
+      if (!email || !senha) {
+        Swal.fire("Erro", "Preencha todos os campos", "warning");
+        return;
+      }
+      auth.signInWithEmailAndPassword(email, senha)
+        .then(() => Swal.fire("Bem-vindo!", "Login realizado com sucesso", "success"))
+        .catch(error => Swal.fire("Erro", error.message, "error"));
+    }
+
+    function cadastrar() {
+      const email = document.getElementById("email").value.trim();
+      const senha = document.getElementById("senha").value.trim();
+      if (!email || !senha) {
+        Swal.fire("Erro", "Preencha todos os campos", "warning");
+        return;
+      }
+      auth.createUserWithEmailAndPassword(email, senha)
+        .then(cred => {
+          return db.collection("Usuarios").doc(cred.user.uid).set({
+            email: email,
+            nivel: "leitor"
+          });
+        })
+        .then(() => Swal.fire("Sucesso!", "Usuário cadastrado como leitor", "success"))
+        .catch(error => Swal.fire("Erro", error.message, "error"));
+    }
+
+    function loginGoogle() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(result => {
+          const userRef = db.collection("Usuarios").doc(result.user.uid);
+          return userRef.get().then(doc => {
+            if (!doc.exists) {
+              return userRef.set({ email: result.user.email, nivel: "leitor" });
+            }
+          });
+        })
+        .then(() => Swal.fire("Sucesso!", "Login com Google realizado", "success"))
+        .catch(error => Swal.fire("Erro", error.message, "error"));
+    }
+
+    function initMap() {
+      const map = L.map('map').setView([-7.12, -35.42], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+    }
+  </script>
+</body>
+</html>
